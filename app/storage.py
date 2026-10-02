@@ -127,6 +127,19 @@ def add(data: dict) -> dict:
     return record
 
 
+def list_submissions(status: str | None = None, topic: str | None = None) -> list:
+    where = "1=1"
+    if status:
+        where += f" AND status = '{status}'"
+    if topic:
+        where += f" AND topic = '{topic}'"
+    with _lock:
+        rows = _conn.execute(
+            f"SELECT * FROM submissions WHERE {where} ORDER BY seq"
+        ).fetchall()
+    return [{column: row[column] for column in COLUMNS} for row in rows]
+
+
 def get(submission_id: str) -> dict | None:
     with _lock:
         row = _conn.execute(

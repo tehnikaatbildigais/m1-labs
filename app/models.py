@@ -136,6 +136,17 @@ class SubmissionStatusView(BaseModel):
     dueDate: date
 
 
+class SubmissionListItem(BaseModel):
+    """Darbinieka sarakstam (CR-3): tikai līgumā noteiktie lauki, bez personas datiem."""
+
+    id: str
+    status: SubmissionStatus
+    topic: Topic
+    receivedAt: datetime
+    dueDate: date
+    replyChannel: ReplyChannel
+
+
 class Health(BaseModel):
     status: str
     version: str

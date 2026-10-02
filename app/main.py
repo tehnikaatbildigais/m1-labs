@@ -23,6 +23,7 @@ from app.models import (
     Submission,
     SubmissionCreate,
     SubmissionCreated,
+    SubmissionListItem,
     SubmissionStatus,
     SubmissionStatusView,
     TopicItem,
@@ -145,6 +146,18 @@ def lookup_submission_status(data: StatusLookup) -> SubmissionStatusView:
         statusName=STATUS_NAMES[status],
         dueDate=record["dueDate"],
     )
+
+
+@app.get(
+    "/submissions",
+    response_model=list[SubmissionListItem],
+    tags=["Iesniegumi"],
+)
+def list_submissions(
+    status: str | None = None, topic: str | None = None
+) -> list[SubmissionListItem]:
+    records = storage.list_submissions(status=status, topic=topic)
+    return [SubmissionListItem(**record) for record in records]
 
 
 @app.get(
