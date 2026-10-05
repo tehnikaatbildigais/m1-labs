@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from app import omd_client, storage
 from app.errors import SubmissionNotFound, register_error_handlers
 from app.models import (
+    TOPIC_NAMES,
     Error,
     Health,
     ReplyChannel,
@@ -20,6 +21,7 @@ from app.models import (
     SubmissionCreate,
     SubmissionCreated,
     SubmissionStatus,
+    TopicItem,
 )
 
 VERSION = "0.1.0"
@@ -46,6 +48,11 @@ def root() -> RedirectResponse:
 @app.get("/health", response_model=Health, tags=["Sistēma"])
 def get_health() -> Health:
     return Health(status="ok", version=VERSION)
+
+
+@app.get("/topics", response_model=list[TopicItem], tags=["Klasifikatori"])
+def list_topics() -> list[TopicItem]:
+    return [TopicItem(code=code, name=name) for code, name in TOPIC_NAMES.items()]
 
 
 @app.post(
