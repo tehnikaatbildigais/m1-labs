@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from app import storage
 from app.main import app, get_omd
+from app.omd_client import MailboxStatus
 
 
 class FakeOmd:
@@ -12,9 +13,12 @@ class FakeOmd:
         self.statuses = {"32000000001": "ACTIVE"}
         self.calls = []
 
-    def __call__(self, personal_code: str) -> str | None:
+    def __call__(self, personal_code: str) -> MailboxStatus:
         self.calls.append(personal_code)
-        return self.statuses.get(personal_code, "NOT_ACTIVATED")
+        result = self.statuses.get(personal_code, "NOT_ACTIVATED")
+        if isinstance(result, Exception):
+            raise result
+        return result
 
 
 @pytest.fixture

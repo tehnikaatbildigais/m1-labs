@@ -1,7 +1,6 @@
 """Ezermalas pieteikumu sistēma · iesniegumu API (mācību prototips)."""
 
 import logging
-from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated
@@ -17,6 +16,8 @@ from app.models import (
     TOPIC_NAMES,
     Error,
     Health,
+    PreferredChannel,
+    ReasonCode,
     ReplyChannel,
     StatusLookup,
     Submission,
@@ -39,8 +40,38 @@ register_error_handlers(app)
 storage.reset()
 
 
-def get_omd() -> Callable[[str], str | None]:
+def get_omd() -> omd_client.MailboxLookup:
     return omd_client.mailbox_status
+
+
+def check_reply_channel(
+    omd: omd_client.MailboxLookup, personal_code: str, preferred: PreferredChannel
+) -> tuple[ReplyChannel, ReasonCode | None, str | None]:
+    """CR-2: nosaka atbildes kanālu. Atgriež kanālu, reasonCode un iemeslu žurnālam."""
+    try:
+        status = omd(personal_code)
+    except omd_client.OmdUnavailable as exc:
+        return _pending(exc.reason)
+    except Exception:
+        # Iesniedzējs nekad nesaņem 500 OMD dēļ. Izņēmuma tekstu nežurnalējam.
+        return _pending("CLIENT_ERROR")
+
+    if status == omd_client.MailboxStatus.ACTIVE:
+        return ReplyChannel.E_ADDRESS, None, None
+    if status not in (
+        omd_client.MailboxStatus.NOT_ACTIVATED,
+        omd_client.MailboxStatus.NO_RECORD,
+    ):
+        return _pending("UNDOCUMENTED_STATUS")
+    # 404 (reģistrā nav ieraksta) nozīmē to pašu, ko NOT_ACTIVATED.
+    log_reason = "NO_RECORD" if status == omd_client.MailboxStatus.NO_RECORD else None
+    if preferred == PreferredChannel.E_ADDRESS:
+        return ReplyChannel.EMAIL, ReasonCode.E_ADDRESS_NOT_ACTIVE, log_reason
+    return ReplyChannel(preferred.value), None, log_reason
+
+
+def _pending(reason: str) -> tuple[ReplyChannel, ReasonCode, str]:
+    return ReplyChannel.PENDING_CHANNEL_CHECK, ReasonCode.REGISTER_UNAVAILABLE, reason
 
 
 @app.get("/", include_in_schema=False)
@@ -67,15 +98,12 @@ def list_topics() -> list[TopicItem]:
 )
 def create_submission(
     data: SubmissionCreate,
-    omd: Annotated[Callable[[str], str | None], Depends(get_omd)],
+    omd: Annotated[omd_client.MailboxLookup, Depends(get_omd)],
 ) -> SubmissionCreated:
-    logger.info("Jauns iesniegums: %s", data.model_dump())
     received_at = datetime.now(timezone.utc).replace(microsecond=0)
-
-    if omd(data.personalCode) == "ACTIVE":
-        reply_channel = ReplyChannel.E_ADDRESS
-    else:
-        reply_channel = ReplyChannel(data.preferredChannel.value)
+    reply_channel, reason_code, log_reason = check_reply_channel(
+        omd, data.personalCode, data.preferredChannel
+    )
 
     record = storage.add(
         {
@@ -84,9 +112,17 @@ def create_submission(
             "receivedAt": received_at.isoformat(),
             "dueDate": (received_at.date() + timedelta(days=REPLY_DAYS)).isoformat(),
             "replyChannel": reply_channel.value,
-            "reasonCode": None,
+            "reasonCode": reason_code.value if reason_code else None,
         }
     )
+    # Žurnālā tikai ID un iemesls: nekad personas kods vai iesnieguma teksts.
+    logger.info("Jauns iesniegums: %s", record["id"])
+    if log_reason:
+        logger.warning(
+            "OMD pārbaude neveiksmīga: iesniegums %s, iemesls %s",
+            record["id"],
+            log_reason,
+        )
     return SubmissionCreated(**record)
 
 

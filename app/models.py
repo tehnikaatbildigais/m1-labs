@@ -20,6 +20,12 @@ class ReplyChannel(str, Enum):
     EMAIL = "EMAIL"
     POST = "POST"
     E_ADDRESS = "E_ADDRESS"
+    PENDING_CHANNEL_CHECK = "PENDING_CHANNEL_CHECK"
+
+
+class ReasonCode(str, Enum):
+    E_ADDRESS_NOT_ACTIVE = "E_ADDRESS_NOT_ACTIVE"
+    REGISTER_UNAVAILABLE = "REGISTER_UNAVAILABLE"
 
 
 class Topic(str, Enum):
@@ -93,7 +99,7 @@ class SubmissionCreated(BaseModel):
     receivedAt: datetime
     dueDate: date
     replyChannel: ReplyChannel
-    reasonCode: str | None = None
+    reasonCode: ReasonCode | None = None
 
 
 class Submission(SubmissionCreated, SubmissionFields):
