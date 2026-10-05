@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="lv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Iesnieguma statuss · Ezermalas novada pašvaldība</title>
+  <style>
+    :root {
+      --navy: #1D3557;
+      --teal: #2A9D8F;
+      --coral: #E76F51;
+      --bg: #F1F3F5;
+      --line: #C9CED6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: #1a1a1a;
+    }
+    header { background: var(--navy); color: #fff; padding: 16px; }
+    header h1 { margin: 0; font-size: 1.25rem; }
+    header p { margin: 4px 0 0; font-size: 0.85rem; opacity: 0.85; }
+    main { max-width: 720px; margin: 0 auto; padding: 16px; }
+    .card { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .hint { margin: 0; font-size: 0.9rem; color: #444; }
+    label { display: block; font-weight: 600; margin-top: 12px; }
+    input {
+      width: 100%; padding: 8px; margin-top: 4px; font: inherit;
+      border: 1px solid var(--line); border-radius: 6px; background: #fff;
+    }
+    .field-error { color: var(--coral); font-size: 0.9rem; margin-top: 4px; min-height: 1em; }
+    .invalid { border-color: var(--coral); }
+    button {
+      margin-top: 16px; padding: 10px 20px; font: inherit; font-weight: 600;
+      color: #fff; background: var(--teal); border: 0; border-radius: 6px; cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    .message { padding: 12px; border-radius: 6px; margin-top: 16px; }
+    .message.error { background: #fdece7; border: 1px solid var(--coral); }
+    #result p { margin: 0; }
+    #result .number { font-size: 0.9rem; color: #444; }
+    #result .status {
+      display: inline-block; margin: 8px 0 12px; padding: 4px 12px; border-radius: 999px;
+      background: var(--navy); color: #fff; font-weight: 600;
+    }
+    .due { margin: 0; }
+    #result .due-left { margin-top: 4px; color: var(--teal); font-weight: 600; }
+    #result .overdue .due-left, #result .overdue .due-date { color: var(--coral); font-weight: 600; }
+    footer { font-size: 0.8rem; color: #555; text-align: center; padding: 16px; }
+    a { color: var(--navy); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Ezermalas novada pašvaldība · Iesnieguma statuss</h1>
+    <p>Mācību prototips. Pašvaldība ir izdomāta. Ievadiet tikai sintētiskus datus.</p>
+  </header>
+
+  <main>
+    <form id="status-form" class="card" novalidate>
+      <p class="hint">Ievadiet iesnieguma numuru un e-pastu, ko norādījāt iesniegumā.</p>
+
+      <label for="id">Iesnieguma numurs</label>
+      <input id="id" name="id" autocomplete="off" placeholder="IES-2026-000123">
+      <div class="field-error" data-for="id"></div>
+
+      <label for="email">E-pasts</label>
+      <input id="email" name="email" type="email" autocomplete="email">
+      <div class="field-error" data-for="email"></div>
+
+      <button type="submit" id="submit">Pārbaudīt statusu</button>
+    </form>
+
+    <section id="result" class="card" aria-live="polite" hidden></section>
+  </main>
+
+  <footer>
+    <a href="/ui/">Iesniegt iesniegumu</a> · <a href="/docs">Swagger UI (/docs)</a> · Ezermalas pieteikumu sistēma · mācību prototips
+  </footer>
+
+  <script>
+    // Forma neko nepārbauda pati: visu validāciju dara API, forma tikai parāda kļūdu.
+    const ISSUE_TEXT = {
+      REQUIRED: "Obligāts lauks",
+      INVALID_FORMAT: "Nepareizs formāts",
+      TOO_LONG: "Pārāk garš teksts",
+    };
+    const FIELD_ISSUE_TEXT = {
+      id: { INVALID_FORMAT: "Numura formāts: IES-GGGG-NNNNNN" },
+    };
+    const NOT_FOUND_TEXT = "Iesniegums ar šādu numuru nav atrasts. Pārbaudiet numuru un e-pastu.";
+    const GENERIC_ERROR_TEXT = "Neizdevās ielādēt datus. Mēģiniet vēlreiz.";
+    // Šiem statusiem termiņš vairs nav aktuāls: dienas neskaitām un nokavētu nerādām.
+    const CLOSED_STATUSES = ["ANSWERED", "WITHDRAWN"];
+
+    const form = document.getElementById("status-form");
+    const result = document.getElementById("result");
+    const submitButton = document.getElementById("submit");
+
+    function formatDate(isoDate) {
+      const [year, month, day] = isoDate.split("-");
+      return `${day}.${month}.${year}`;
+    }
+
+    // Dienas starp šodienu un termiņu pēc kalendāra, bez laika daļas.
+    function daysUntil(isoDate) {
+      const [year, month, day] = isoDate.split("-").map(Number);
+      const due = Date.UTC(year, month - 1, day);
+      const now = new Date();
+      const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+      return Math.round((due - today) / 86400000);
+    }
+
+    function daysLeftText(days) {
+      // Latviešu valodā skaitļiem, kas beidzas ar 1 (izņemot 11), vienskaitlis.
+      const singular = days % 10 === 1 && days % 100 !== 11;
+      return singular ? `Atlikusi ${days} diena` : `Atlikušas ${days} dienas`;
+    }
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text != null) node.textContent = text;
+      return node;
+    }
+
+    function clearErrors() {
+      document.querySelectorAll(".field-error").forEach((node) => (node.textContent = ""));
+      document.querySelectorAll(".invalid").forEach((node) => node.classList.remove("invalid"));
+      result.hidden = true;
+      result.className = "card";
+      result.replaceChildren();
+    }
+
+    function showMessage(text) {
+      result.className = "card message error";
+      result.replaceChildren(el("p", null, text));
+      result.hidden = false;
+    }
+
+    function showFieldErrors(details) {
+      let shown = false;
+      for (const detail of details || []) {
+        const target = document.querySelector(`.field-error[data-for="${detail.field}"]`);
+        if (!target) continue;
+        target.textContent = FIELD_ISSUE_TEXT[detail.field]?.[detail.issue] || ISSUE_TEXT[detail.issue] || "Pārbaudiet lauku";
+        document.getElementById(detail.field)?.classList.add("invalid");
+        shown = true;
+      }
+      return shown;
+    }
+
+    function showResult(data) {
+      const due = el("div", "due");
+      due.append(el("strong", null, "Atbildes termiņš: "), el("span", "due-date", formatDate(data.dueDate)));
+
+      if (!CLOSED_STATUSES.includes(data.status)) {
+        const days = daysUntil(data.dueDate);
+        if (days < 0) {
+          due.classList.add("overdue");
+          due.append(el("p", "due-left", "Termiņš nokavēts"));
+        } else {
+          due.append(el("p", "due-left", daysLeftText(days)));
+        }
+      }
+
+      result.className = "card";
+      result.replaceChildren(
+        el("p", "number", `Iesniegums ${data.id}`),
+        el("div", "status", data.statusName),
+        due,
+      );
+      result.hidden = false;
+    }
+
+    function showError(status, body) {
+      if (status === 404) {
+        showMessage(NOT_FOUND_TEXT);
+        return;
+      }
+      if (status === 400 && showFieldErrors(body?.error?.details)) {
+        return;
+      }
+      showMessage(GENERIC_ERROR_TEXT);
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      clearErrors();
+      const payload = Object.fromEntries(new FormData(form).entries());
+      // Tukšus laukus nesūtām: API pats pasaka, kas trūkst.
+      for (const key of Object.keys(payload)) {
+        if (payload[key] === "") delete payload[key];
+      }
+      submitButton.disabled = true;
+      try {
+        const response = await fetch("/submissions/status-lookup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        let body = null;
+        try { body = await response.json(); } catch (e) { /* nav JSON */ }
+        if (response.ok && body) {
+          showResult(body);
+        } else {
+          showError(response.status, body);
+        }
+      } catch (error) {
+        showMessage(GENERIC_ERROR_TEXT);
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

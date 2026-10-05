@@ -1,5 +1,6 @@
 """Datu modeļi pēc API līguma (API contract) docs/openapi.yaml."""
 
+import re
 from datetime import date, datetime
 from enum import Enum
 
@@ -47,6 +48,18 @@ class SubmissionStatus(str, Enum):
     WITHDRAWN = "WITHDRAWN"
 
 
+# Statusa nosaukumi iedzīvotājam (statusa lapa).
+STATUS_NAMES = {
+    SubmissionStatus.RECEIVED: "Saņemts",
+    SubmissionStatus.IN_PROGRESS: "Izskatīšanā",
+    SubmissionStatus.FORWARDED: "Pārsūtīts",
+    SubmissionStatus.ANSWERED: "Atbildēts",
+    SubmissionStatus.WITHDRAWN: "Atsaukts",
+}
+
+SUBMISSION_ID_PATTERN = re.compile(r"^IES-[0-9]{4}-[0-9]{6}$")
+
+
 class TopicItem(BaseModel):
     code: Topic
     name: str
@@ -86,6 +99,35 @@ class SubmissionCreated(BaseModel):
 class Submission(SubmissionCreated, SubmissionFields):
     # Bez ievades pārbaudes: agrāk saglabātie ieraksti var neatbilst CR-1 noteikumiem.
     pass
+
+
+class StatusLookup(BaseModel):
+    id: str
+    email: str
+
+    @field_validator("id", "email")
+    @classmethod
+    def check_not_empty(cls, value: str) -> str:
+        value = value.strip()
+        if value == "":
+            raise PydanticCustomError("missing", "Field required")
+        return value
+
+    @field_validator("id")
+    @classmethod
+    def check_id_format(cls, value: str) -> str:
+        if not SUBMISSION_ID_PATTERN.match(value):
+            raise PydanticCustomError("submission_id", "Invalid submission id")
+        return value
+
+
+class SubmissionStatusView(BaseModel):
+    """Iedzīvotājam: tikai statuss un termiņš, bez personas datiem."""
+
+    id: str
+    status: SubmissionStatus
+    statusName: str
+    dueDate: date
 
 
 class Health(BaseModel):
