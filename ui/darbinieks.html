@@ -5,20 +5,53 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Iesniegumu saraksts · darbiniekam</title>
   <style>
-    :root { --navy: #1D3557; --teal: #2A9D8F; --bg: #F1F3F5; --line: #C9CED6; }
+    :root {
+      --navy: #1D3557;
+      --teal: #2A9D8F;
+      --coral: #E76F51;
+      --bg: #F1F3F5;
+      --line: #C9CED6;
+    }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: #1a1a1a;
+    }
     header { background: var(--navy); color: #fff; padding: 16px; }
     header h1 { margin: 0; font-size: 1.25rem; }
     main { max-width: 1100px; margin: 0 auto; padding: 16px; }
-    .filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+    .filters {
+      display: flex; flex-wrap: wrap; gap: 12px; align-items: end;
+      background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 16px;
+    }
+    .filters > div { flex: 1 1 160px; }
     label { display: block; font-weight: 600; }
-    input, select { padding: 8px; font: inherit; border: 1px solid var(--line); border-radius: 6px; margin-top: 4px; }
-    button { padding: 9px 18px; font: inherit; font-weight: 600; color: #fff; background: var(--teal); border: 0; border-radius: 6px; cursor: pointer; }
-    table { width: 100%; border-collapse: collapse; margin-top: 16px; background: #fff; }
-    th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-    th { background: #e8ecf1; }
+    select { width: 100%; padding: 8px; font: inherit; border: 1px solid var(--line); border-radius: 6px; margin-top: 4px; background: #fff; }
+    button {
+      padding: 9px 18px; font: inherit; font-weight: 600;
+      color: #fff; background: var(--teal); border: 0; border-radius: 6px; cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: default; }
     .count { margin-top: 12px; color: #444; }
+    .message { margin-top: 12px; padding: 12px 16px; border-radius: 8px; }
+    .message.error { background: #fdece7; border: 1px solid var(--coral); }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; background: #fff; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { background: #e8ecf1; color: var(--navy); }
+    .due-left { display: block; color: var(--teal); font-weight: 600; }
+    .overdue, .overdue .due-left { color: var(--coral); font-weight: 600; }
+
+    /* Šaurā ekrānā (arī 360 px) katrs iesniegums ir kartīte. */
+    @media (max-width: 640px) {
+      thead { display: none; }
+      table, tbody, tr, td { display: block; width: 100%; }
+      table { background: transparent; }
+      tr { background: #fff; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; padding: 4px 0; }
+      td { border: 0; padding: 6px 12px; display: flex; gap: 12px; }
+      td::before { content: attr(data-label); flex: 0 0 90px; font-weight: 600; color: var(--navy); }
+    }
   </style>
 </head>
 <body>
@@ -27,70 +60,176 @@
     <form class="filters" id="filters">
       <div>
         <label for="status">Statuss</label>
-        <input id="status" name="status" placeholder="piemēram, RECEIVED">
+        <select id="status" name="status">
+          <option value="">Visi</option>
+        </select>
       </div>
       <div>
         <label for="topic">Tēma</label>
         <select id="topic" name="topic">
           <option value="">Visas</option>
-          <option value="ROADS">Ceļi un ielas</option>
-          <option value="WASTE">Atkritumi</option>
-          <option value="PLANNING">Teritorijas plānošana</option>
-          <option value="PARKS">Parki un skvēri</option>
-          <option value="OTHER">Cits</option>
         </select>
       </div>
-      <button type="submit">Meklēt</button>
+      <button type="submit" id="search">Meklēt</button>
     </form>
-    <div class="count" id="count"></div>
-    <table>
+    <div class="count" id="count" aria-live="polite"></div>
+    <table id="table" hidden>
       <thead>
-        <tr><th>Numurs</th><th>Statuss</th><th>Tēma</th><th>Saņemts</th><th>Termiņš</th><th>Kanāls</th></tr>
+        <tr><th>Numurs</th><th>Statuss</th><th>Tēma</th><th>Saņemts</th><th>Atbildes termiņš</th><th>Atbildes kanāls</th></tr>
       </thead>
       <tbody id="rows"></tbody>
     </table>
   </main>
   <script>
+    // Forma neko nepārbauda pati: visu validāciju dara API, forma tikai parāda kļūdu.
+    const STATUS_TEXT = {
+      RECEIVED: "Saņemts",
+      IN_PROGRESS: "Izskatīšanā",
+      FORWARDED: "Pārsūtīts",
+      ANSWERED: "Atbildēts",
+      WITHDRAWN: "Atsaukts",
+    };
+    const CHANNEL_TEXT = {
+      EMAIL: "E-pasts",
+      POST: "Pasts",
+      E_ADDRESS: "E-adrese",
+      PENDING_CHANNEL_CHECK: "Kanāls jāpārbauda",
+    };
+    const GENERIC_ERROR_TEXT = "Neizdevās ielādēt datus. Mēģiniet vēlreiz.";
+    // Šiem statusiem termiņš vairs nav aktuāls: dienas neskaitām un nokavētu nerādām.
+    const CLOSED_STATUSES = ["ANSWERED", "WITHDRAWN"];
+    const COLUMNS = ["Numurs", "Statuss", "Tēma", "Saņemts", "Atbildes termiņš", "Atbildes kanāls"];
+
+    const form = document.getElementById("filters");
+    const statusSelect = document.getElementById("status");
+    const topicSelect = document.getElementById("topic");
+    const searchButton = document.getElementById("search");
+    const table = document.getElementById("table");
     const rows = document.getElementById("rows");
     const count = document.getElementById("count");
+    const topicText = {};
 
-    function cell(text) {
-      const td = document.createElement("td");
-      td.textContent = text == null ? "" : text;
+    function formatDate(isoDate) {
+      const [year, month, day] = isoDate.slice(0, 10).split("-");
+      return `${day}.${month}.${year}`;
+    }
+
+    // Dienas starp šodienu un termiņu pēc kalendāra, bez laika daļas.
+    function daysUntil(isoDate) {
+      const [year, month, day] = isoDate.split("-").map(Number);
+      const due = Date.UTC(year, month - 1, day);
+      const now = new Date();
+      const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+      return Math.round((due - today) / 86400000);
+    }
+
+    function daysLeftText(days) {
+      // Latviešu valodā skaitļiem, kas beidzas ar 1 (izņemot 11), vienskaitlis.
+      const singular = days % 10 === 1 && days % 100 !== 11;
+      return singular ? `Atlikusi ${days} diena` : `Atlikušas ${days} dienas`;
+    }
+
+    function el(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text != null) node.textContent = text;
+      return node;
+    }
+
+    function addOption(select, value, text) {
+      const option = el("option", null, text);
+      option.value = value;
+      select.appendChild(option);
+    }
+
+    function dueCell(item) {
+      const td = el("td");
+      const due = el("div");
+      due.append(el("span", null, formatDate(item.dueDate)));
+      if (!CLOSED_STATUSES.includes(item.status)) {
+        const days = daysUntil(item.dueDate);
+        if (days < 0) {
+          due.classList.add("overdue");
+          due.append(el("span", "due-left", "Termiņš nokavēts"));
+        } else {
+          due.append(el("span", "due-left", daysLeftText(days)));
+        }
+      }
+      td.append(due);
       return td;
+    }
+
+    function showMessage(text, isError) {
+      table.hidden = true;
+      rows.replaceChildren();
+      count.className = isError ? "message error" : "count";
+      count.textContent = text;
+    }
+
+    function showList(items) {
+      if (items.length === 0) {
+        showMessage("Pēc izvēlētajiem filtriem iesniegumu nav.", false);
+        return;
+      }
+      count.className = "count";
+      count.textContent = `Atrasti iesniegumi: ${items.length}`;
+      rows.replaceChildren(
+        ...items.map((item) => {
+          const tr = el("tr");
+          tr.append(
+            el("td", null, item.id),
+            el("td", null, STATUS_TEXT[item.status] || item.status),
+            el("td", null, topicText[item.topic] || item.topic),
+            el("td", null, formatDate(item.receivedAt)),
+            dueCell(item),
+            el("td", null, CHANNEL_TEXT[item.replyChannel] || item.replyChannel),
+          );
+          tr.querySelectorAll("td").forEach((td, i) => (td.dataset.label = COLUMNS[i]));
+          return tr;
+        }),
+      );
+      table.hidden = false;
     }
 
     async function load(event) {
       if (event) event.preventDefault();
       const params = new URLSearchParams();
-      const status = document.getElementById("status").value;
-      const topic = document.getElementById("topic").value;
-      if (status) params.set("status", status);
-      if (topic) params.set("topic", topic);
-      rows.innerHTML = "";
-      let data;
+      if (statusSelect.value) params.set("status", statusSelect.value);
+      if (topicSelect.value) params.set("topic", topicSelect.value);
+      searchButton.disabled = true;
       try {
         const response = await fetch("/submissions?" + params.toString());
-        data = response.ok ? await response.json() : null;
-      } catch {
-        data = null;
-      }
-      // Validāciju dara API; lapa tikai paziņo par kļūdu bez tehniskā teksta.
-      if (!Array.isArray(data)) {
-        count.textContent = "Neizdevās ielādēt datus. Mēģiniet vēlreiz.";
-        return;
-      }
-      count.textContent = "Atrasti: " + data.length;
-      for (const s of data) {
-        const tr = document.createElement("tr");
-        [s.id, s.status, s.topic, s.receivedAt.slice(0, 10), s.dueDate, s.replyChannel]
-          .forEach((value) => tr.appendChild(cell(value)));
-        rows.appendChild(tr);
+        const data = response.ok ? await response.json() : null;
+        if (Array.isArray(data)) {
+          showList(data);
+        } else {
+          showMessage(GENERIC_ERROR_TEXT, true);
+        }
+      } catch (error) {
+        showMessage(GENERIC_ERROR_TEXT, true);
+      } finally {
+        searchButton.disabled = false;
       }
     }
 
-    document.getElementById("filters").addEventListener("submit", load);
-    load();
+    async function init() {
+      for (const [code, text] of Object.entries(STATUS_TEXT)) addOption(statusSelect, code, text);
+      // Tēmu sarakstu ņem no API (CR-0), lai to neuzturētu divās vietās.
+      try {
+        const response = await fetch("/topics");
+        const topics = response.ok ? await response.json() : [];
+        for (const topic of topics) {
+          topicText[topic.code] = topic.name;
+          addOption(topicSelect, topic.code, topic.name);
+        }
+      } catch (error) {
+        // Bez tēmām saraksts joprojām darbojas; tēmas kods paliek redzams.
+      }
+      form.addEventListener("submit", load);
+      load();
+    }
+
+    init();
   </script>
 </body>
 </html>

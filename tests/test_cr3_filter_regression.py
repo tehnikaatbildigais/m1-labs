@@ -78,3 +78,24 @@ def test_staff_page_does_not_show_personal_data(seeded):
     assert "s.fullName" not in page
     assert "s.body" not in page
     assert "JSON.stringify" not in page
+
+
+def test_staff_page_follows_ui_rules(seeded):
+    page = seeded.get("/ui/darbinieks.html").text
+    # Viens fails bez ārējām bibliotēkām un CDN.
+    assert "<script src" not in page
+    assert "<link" not in page
+    # Statusi, termiņi un kļūda latviski pēc ezermala-ui noteikumiem.
+    for text in (
+        "Saņemts",
+        "Izskatīšanā",
+        "Pārsūtīts",
+        "Atbildēts",
+        "Atsaukts",
+        "Termiņš nokavēts",
+        "Atlikušas",
+        "Neizdevās ielādēt datus. Mēģiniet vēlreiz.",
+    ):
+        assert text in page
+    for color in ("#1D3557", "#2A9D8F", "#E76F51", "#F1F3F5"):
+        assert color in page
