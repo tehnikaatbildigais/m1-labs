@@ -66,12 +66,14 @@ class SubmissionCreate(SubmissionFields):
     @field_validator("personalCode")
     @classmethod
     def check_personal_code(cls, value: str) -> str:
-        # CR-1: tukšs kods ir REQUIRED, viss pārējais nederīgais ir INVALID_FORMAT.
-        if value == "":
+        # CR-1: tukšs kods vai tikai atstarpes ir REQUIRED, cits nederīgais ir
+        # INVALID_FORMAT. Saglabā 11 ciparus bez defises un atstarpēm.
+        if personal_code.compact(value) == "":
             raise PydanticCustomError("missing", "Field required")
-        if not personal_code.is_valid(value):
+        code = personal_code.normalize(value)
+        if code is None:
             raise PydanticCustomError("personal_code", "Invalid personal code")
-        return value
+        return code
 
 
 class SubmissionCreated(BaseModel):
