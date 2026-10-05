@@ -13,14 +13,17 @@ from fastapi.staticfiles import StaticFiles
 from app import omd_client, storage
 from app.errors import SubmissionNotFound, register_error_handlers
 from app.models import (
+    STATUS_NAMES,
     TOPIC_NAMES,
     Error,
     Health,
     ReplyChannel,
+    StatusLookup,
     Submission,
     SubmissionCreate,
     SubmissionCreated,
     SubmissionStatus,
+    SubmissionStatusView,
     TopicItem,
 )
 
@@ -85,6 +88,27 @@ def create_submission(
         }
     )
     return SubmissionCreated(**record)
+
+
+@app.post(
+    "/submissions/status-lookup",
+    response_model=SubmissionStatusView,
+    responses={400: {"model": Error}, 404: {"model": Error}},
+    tags=["Iesniegumi"],
+)
+def lookup_submission_status(data: StatusLookup) -> SubmissionStatusView:
+    record = storage.get(data.id)
+    # Neeksistējošs ID un nepareizs e-pasts dod vienu un to pašu atbildi,
+    # lai pēc atbildes nevarētu uzzināt, kuri iesniegumi eksistē.
+    if record is None or record["email"].casefold() != data.email.casefold():
+        raise SubmissionNotFound()
+    status = SubmissionStatus(record["status"])
+    return SubmissionStatusView(
+        id=record["id"],
+        status=status,
+        statusName=STATUS_NAMES[status],
+        dueDate=record["dueDate"],
+    )
 
 
 @app.get(

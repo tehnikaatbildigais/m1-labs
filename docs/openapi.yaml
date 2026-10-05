@@ -144,6 +144,43 @@ paths:
         '400':
           $ref: '#/components/responses/ValidationError'
 
+  /submissions/status-lookup:
+    post:
+      tags: [Iesniegumi]
+      operationId: lookupSubmissionStatus
+      summary: Iesnieguma statuss iedzīvotājam
+      description: |
+        Iedzīvotājs ievada iesnieguma numuru un e-pastu, ko norādīja iesniegumā,
+        un saņem statusu un atbildes termiņu. Atbildē nav personas datu.
+
+        Ja iesnieguma nav vai e-pasts nesakrīt, atbilde abos gadījumos ir viena
+        un tā pati (404 `NOT_FOUND`), lai nevarētu uzzināt, kuri iesniegumi eksistē.
+        E-pastu salīdzina bez lielo un mazo burtu atšķirības. Pieprasījums ir POST,
+        lai e-pasts nenonāktu URL un žurnālos.
+
+        Kļūdas: tukšs lauks vai lauka nav — `REQUIRED`; `id` neatbilst formātam
+        `IES-GGGG-NNNNNN` — `INVALID_FORMAT`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusLookup'
+            example:
+              id: IES-2026-000001
+              email: janis.berzins@example.com
+      responses:
+        '200':
+          description: Iesnieguma statuss
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmissionStatusView'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /submissions/{id}:
     get:
       tags: [Iesniegumi]
@@ -292,6 +329,43 @@ components:
           format: date
         replyChannel:
           $ref: '#/components/schemas/ReplyChannel'
+
+    StatusLookup:
+      description: Iesnieguma statusa pieprasījums (iedzīvotājam)
+      type: object
+      required: [id, email]
+      properties:
+        id:
+          type: string
+          pattern: '^IES-[0-9]{4}-[0-9]{6}$'
+          description: Iesnieguma numurs
+          example: IES-2026-000001
+        email:
+          type: string
+          description: E-pasts, kas norādīts iesniegumā
+          example: janis.berzins@example.com
+
+    SubmissionStatusView:
+      description: Iesnieguma statuss iedzīvotājam. Tikai šie lauki, bez personas datiem.
+      type: object
+      required: [id, status, statusName, dueDate]
+      properties:
+        id:
+          type: string
+          example: IES-2026-000001
+        status:
+          $ref: '#/components/schemas/SubmissionStatus'
+        statusName:
+          type: string
+          description: |
+            Statusa nosaukums: `RECEIVED` Saņemts · `IN_PROGRESS` Izskatīšanā ·
+            `FORWARDED` Pārsūtīts · `ANSWERED` Atbildēts · `WITHDRAWN` Atsaukts
+          example: Saņemts
+        dueDate:
+          type: string
+          format: date
+          description: Atbildes termiņš
+          example: '2026-11-02'
 
     PreferredChannel:
       type: string
