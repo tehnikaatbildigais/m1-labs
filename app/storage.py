@@ -127,6 +127,21 @@ def add(data: dict) -> dict:
     return record
 
 
+def list_submissions(status: str | None = None, topic: str | None = None) -> list:
+    # Vērtības nodod tikai kā parametrus, nekad neieliek SQL tekstā.
+    with _lock:
+        rows = _conn.execute(
+            """
+            SELECT * FROM submissions
+            WHERE (:status IS NULL OR status = :status)
+              AND (:topic IS NULL OR topic = :topic)
+            ORDER BY seq
+            """,
+            {"status": status, "topic": topic},
+        ).fetchall()
+    return [{column: row[column] for column in COLUMNS} for row in rows]
+
+
 def get(submission_id: str) -> dict | None:
     with _lock:
         row = _conn.execute(
