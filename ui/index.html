@@ -57,7 +57,7 @@
     <form id="submission-form" class="card" novalidate>
       <label for="personalCode">Personas kods</label>
       <input id="personalCode" name="personalCode" autocomplete="off"
-             inputmode="numeric" placeholder="DDMMGG-NNNNN vai 32NNNNNNNNN">
+             placeholder="NNNNNN-NNNNN vai 11 cipari">
       <div class="field-error" data-for="personalCode"></div>
 
       <label for="fullName">Vārds, uzvārds</label>
@@ -113,7 +113,7 @@
     };
     // Laukam specifisks teksts, ja vispārīgais ir par neskaidru.
     const FIELD_ISSUE_TEXT = {
-      personalCode: { INVALID_FORMAT: "Personas kodā jābūt 11 cipariem" },
+      personalCode: { INVALID_FORMAT: "Ievadiet 11 ciparus vai NNNNNN-NNNNN" },
     };
     const STATUS_TEXT = {
       RECEIVED: "Saņemts",
@@ -215,91 +215,10 @@
       message.innerHTML = lines.join("<br>");
     }
 
-    // CR-1: personas koda ievade. Pieņem tikai ciparus, un katru ciparu pārbauda
-    // jau ievadot: nederīgu ciparu laukā neieliek un parāda iemeslu.
-    // Vecais formāts DDMMGG-CNNNK (defisi pievieno forma), jaunais 32NNNNNNNNN.
-    // Tie paši noteikumi ir serverī: app/personal_code.py.
-    // maxlength laukam nav: garumu ierobežo pati maska (11 cipari), defisi neskaitot.
-    const PC_WEIGHTS = [1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
-    const PC_CENTURIES = { 0: 1800, 1: 1900, 2: 2000 };
-    const PC_DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-
-    // Atgriež kļūdas tekstu, ja ciparu virkne nevar būt derīga koda sākums.
-    function personalCodePrefixError(digits) {
-      const n = digits.length;
-      if (n > 11) return "Personas kodā ir 11 cipari";
-      if (n >= 1 && digits[0] > "3") return "Personas kods sākas ar dzimšanas dienu (01–31) vai 32";
-      if (n < 2 || digits.startsWith("32")) return null;
-      const day = Number(digits.slice(0, 2));
-      if (day < 1 || day > 31) return "Personas kods sākas ar dzimšanas dienu (01–31) vai 32";
-      if (n >= 3 && digits[2] > "1") return "Nederīgs mēnesis";
-      if (n < 4) return null;
-      const month = Number(digits.slice(2, 4));
-      if (month < 1 || month > 12) return "Nederīgs mēnesis";
-      if (day > PC_DAYS_IN_MONTH[month - 1]) return "Šādā mēnesī nav tik daudz dienu";
-      if (n < 7) return null;
-      const century = PC_CENTURIES[digits[6]];
-      if (century === undefined) return "Septītajam ciparam jābūt 0, 1 vai 2 (gadsimts)";
-      const year = century + Number(digits.slice(4, 6));
-      const born = new Date(year, month - 1, day);
-      if (born.getMonth() !== month - 1) return "Šāda datuma nav (nav garais gads)";
-      if (born > new Date()) return "Dzimšanas datums nevar būt nākotnē";
-      if (n < 11) return null;
-      const sum = PC_WEIGHTS.reduce((acc, w, i) => acc + w * Number(digits[i]), 0);
-      if ((1101 - sum) % 11 !== Number(digits[10])) return "Pēdējais cipars (kontrolcipars) neatbilst pārējiem: pārbaudiet kodu";
-      return null;
-    }
-
-    function formatPersonalCode(digits, deleting) {
-      if (digits.startsWith("32") || digits.length < 6) return digits;
-      // Dzēšot defisi pēc sestā cipara nepievienojam, citādi to nevarētu izdzēst.
-      if (digits.length === 6 && deleting) return digits;
-      return `${digits.slice(0, 6)}-${digits.slice(6)}`;
-    }
-
-    const personalCodeInput = document.getElementById("personalCode");
-    const personalCodeError = document.querySelector('.field-error[data-for="personalCode"]');
-
-    personalCodeInput.addEventListener("input", (event) => {
-      const raw = personalCodeInput.value;
-      const caret = personalCodeInput.selectionStart ?? raw.length;
-      const typed = raw.replace(/[^0-9]/g, "");
-      let digits = "";
-      // Atstarpes un defises ielīmētā tekstā klusi izmetam, par citām rakstzīmēm brīdinām.
-      let error = /[^0-9\s-]/.test(raw) ? "Ievadiet tikai ciparus" : null;
-      for (const d of typed) {
-        if (digits.length === 11) break;
-        const reason = personalCodePrefixError(digits + d);
-        if (reason) { error = reason; break; }
-        digits += d;
-      }
-      // Kods pilns un derīgs (katrs cipars jau pārbaudīts): lieko ievadi klusi
-      // ignorējam, lai lietotājs nedomātu, ka ievadītajā ir kļūda.
-      if (digits.length === 11) error = null;
-      const deleting = (event.inputType || "").startsWith("delete");
-      const value = formatPersonalCode(digits, deleting);
-      personalCodeInput.value = value;
-
-      // Kursoru atstājam aiz tā paša cipara, pie kura tas bija.
-      let digitsBefore = Math.min(raw.slice(0, caret).replace(/[^0-9]/g, "").length, digits.length);
-      let pos = 0;
-      while (digitsBefore > 0 && pos < value.length) {
-        if (value[pos] !== "-") digitsBefore--;
-        pos++;
-      }
-      if (value[pos] === "-" && !deleting) pos++;
-      personalCodeInput.setSelectionRange(pos, pos);
-
-      personalCodeError.textContent = error || "";
-      personalCodeInput.classList.toggle("invalid", Boolean(error));
-    });
-
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       clearErrors();
       const payload = Object.fromEntries(new FormData(form).entries());
-      // Defise ir tikai attēlošanai: API pieņem 11 ciparus.
-      if (payload.personalCode) payload.personalCode = payload.personalCode.replace(/-/g, "");
       // Tukšus laukus nesūtām: API pats pasaka, kas trūkst.
       for (const key of Object.keys(payload)) {
         if (payload[key] === "") delete payload[key];
