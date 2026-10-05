@@ -204,21 +204,7 @@ components:
       properties:
         personalCode:
           type: string
-          description: |
-            Iesniedzēja personas kods (CR-1). Pārbauda tikai formātu:
-            dzimšanas datumu un kontrolciparu nepārbauda.
-
-            1. Visas atstarpes (arī vidū) tiek noņemtas.
-            2. Derīgi divi pieraksti: 11 cipari (`NNNNNNNNNNN`) vai
-               6 cipari, defise un 5 cipari (`NNNNNN-NNNNN`).
-               Cipari tikai `0`–`9`.
-            3. Saglabā 11 ciparus bez defises un atstarpēm.
-
-            Kļūdas laukam `personalCode`: lauka nav, tukšs teksts vai tikai
-            atstarpes — `REQUIRED`; jebkas cits nederīgs (arī par īsu, par
-            garu vai defise citā vietā) — `INVALID_FORMAT`. `TOO_LONG` šim
-            laukam netiek izmantots. Kļūdas atbildē un žurnālā ievadīto kodu
-            neatkārto.
+          description: Iesniedzēja personas kods. Formāta noteikumi pieteikumā CR-1.
           example: '32000000001'
         fullName:
           type: string

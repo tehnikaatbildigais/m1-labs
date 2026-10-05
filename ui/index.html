@@ -56,8 +56,7 @@
   <main>
     <form id="submission-form" class="card" novalidate>
       <label for="personalCode">Personas kods</label>
-      <input id="personalCode" name="personalCode" autocomplete="off"
-             placeholder="NNNNNN-NNNNN vai 11 cipari">
+      <input id="personalCode" name="personalCode" autocomplete="off">
       <div class="field-error" data-for="personalCode"></div>
 
       <label for="fullName">Vārds, uzvārds</label>
@@ -110,10 +109,6 @@
       REQUIRED: "Obligāts lauks",
       INVALID_FORMAT: "Nepareizs formāts",
       TOO_LONG: "Pārāk garš teksts",
-    };
-    // Laukam specifisks teksts, ja vispārīgais ir par neskaidru.
-    const FIELD_ISSUE_TEXT = {
-      personalCode: { INVALID_FORMAT: "Ievadiet 11 ciparus vai NNNNNN-NNNNN" },
     };
     const STATUS_TEXT = {
       RECEIVED: "Saņemts",
@@ -177,7 +172,7 @@
       const unknown = [];
       for (const detail of details || []) {
         const target = document.querySelector(`.field-error[data-for="${detail.field}"]`);
-        const text = FIELD_ISSUE_TEXT[detail.field]?.[detail.issue] || ISSUE_TEXT[detail.issue] || detail.issue;
+        const text = ISSUE_TEXT[detail.issue] || detail.issue;
         if (target) {
           target.textContent = text;
           document.getElementById(detail.field)?.classList.add("invalid");

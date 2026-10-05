@@ -3,10 +3,7 @@
 from datetime import date, datetime
 from enum import Enum
 
-from pydantic import BaseModel, field_validator
-from pydantic_core import PydanticCustomError
-
-from app import personal_code
+from pydantic import BaseModel
 
 
 class PreferredChannel(str, Enum):
@@ -52,7 +49,7 @@ class TopicItem(BaseModel):
     name: str
 
 
-class SubmissionFields(BaseModel):
+class SubmissionCreate(BaseModel):
     personalCode: str
     fullName: str
     email: str  # TODO: pārbaudīt e-pasta formātu
@@ -60,20 +57,6 @@ class SubmissionFields(BaseModel):
     topic: Topic
     subject: str
     body: str
-
-
-class SubmissionCreate(SubmissionFields):
-    @field_validator("personalCode")
-    @classmethod
-    def check_personal_code(cls, value: str) -> str:
-        # CR-1: tukšs kods vai tikai atstarpes ir REQUIRED, cits nederīgais ir
-        # INVALID_FORMAT. Saglabā 11 ciparus bez defises un atstarpēm.
-        if personal_code.compact(value) == "":
-            raise PydanticCustomError("missing", "Field required")
-        code = personal_code.normalize(value)
-        if code is None:
-            raise PydanticCustomError("personal_code", "Invalid personal code")
-        return code
 
 
 class SubmissionCreated(BaseModel):
@@ -85,8 +68,7 @@ class SubmissionCreated(BaseModel):
     reasonCode: str | None = None
 
 
-class Submission(SubmissionCreated, SubmissionFields):
-    # Bez ievades pārbaudes: agrāk saglabātie ieraksti var neatbilst CR-1 noteikumiem.
+class Submission(SubmissionCreated, SubmissionCreate):
     pass
 
 
