@@ -205,18 +205,20 @@ components:
         personalCode:
           type: string
           description: |
-            Iesniedzēja personas kods (CR-1). Tieši 11 cipari, bez defises
-            un atstarpēm. Derīgi divi formāti:
+            Iesniedzēja personas kods (CR-1). Pārbauda tikai formātu:
+            dzimšanas datumu un kontrolciparu nepārbauda.
 
-            - vecais `DDMMGGCNNNK`: dzimšanas datums, gadsimta cipars `C`
-              (`0` = 1800., `1` = 1900., `2` = 2000.), `NNN` un kontrolcipars `K`.
-              Datumam jāeksistē un jābūt ne vēlākam par šodienu.
-            - jaunais `32NNNNNNNNN`: sākas ar `32`, datuma un kontrolcipara nav.
+            1. Visas atstarpes (arī vidū) tiek noņemtas.
+            2. Derīgi divi pieraksti: 11 cipari (`NNNNNNNNNNN`) vai
+               6 cipari, defise un 5 cipari (`NNNNNN-NNNNN`).
+               Cipari tikai `0`–`9`.
+            3. Saglabā 11 ciparus bez defises un atstarpēm.
 
-            Kļūdas laukam `personalCode`: tukšs teksts vai lauka nav —
-            `REQUIRED`; jebkas cits nederīgs (arī par īsu vai par garu) —
-            `INVALID_FORMAT`. `TOO_LONG` šim laukam netiek izmantots.
-          pattern: '^[0-9]{11}$'
+            Kļūdas laukam `personalCode`: lauka nav, tukšs teksts vai tikai
+            atstarpes — `REQUIRED`; jebkas cits nederīgs (arī par īsu, par
+            garu vai defise citā vietā) — `INVALID_FORMAT`. `TOO_LONG` šim
+            laukam netiek izmantots. Kļūdas atbildē un žurnālā ievadīto kodu
+            neatkārto.
           example: '32000000001'
         fullName:
           type: string
