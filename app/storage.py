@@ -128,14 +128,16 @@ def add(data: dict) -> dict:
 
 
 def list_submissions(status: str | None = None, topic: str | None = None) -> list:
-    where = "1=1"
-    if status:
-        where += f" AND status = '{status}'"
-    if topic:
-        where += f" AND topic = '{topic}'"
+    # Vērtības nodod tikai kā parametrus, nekad neieliek SQL tekstā.
     with _lock:
         rows = _conn.execute(
-            f"SELECT * FROM submissions WHERE {where} ORDER BY seq"
+            """
+            SELECT * FROM submissions
+            WHERE (:status IS NULL OR status = :status)
+              AND (:topic IS NULL OR topic = :topic)
+            ORDER BY seq
+            """,
+            {"status": status, "topic": topic},
         ).fetchall()
     return [{column: row[column] for column in COLUMNS} for row in rows]
 

@@ -137,7 +137,7 @@ class SubmissionStatusView(BaseModel):
 
 
 class SubmissionListItem(BaseModel):
-    """Darbinieka sarakstam (CR-3): tikai līgumā noteiktie lauki, bez personas datiem."""
+    """Darbinieka sarakstam (CR-3): tikai līguma lauki, bez personas datiem."""
 
     id: str
     status: SubmissionStatus

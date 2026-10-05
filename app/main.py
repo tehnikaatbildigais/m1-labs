@@ -26,6 +26,7 @@ from app.models import (
     SubmissionListItem,
     SubmissionStatus,
     SubmissionStatusView,
+    Topic,
     TopicItem,
 )
 
@@ -151,12 +152,17 @@ def lookup_submission_status(data: StatusLookup) -> SubmissionStatusView:
 @app.get(
     "/submissions",
     response_model=list[SubmissionListItem],
+    responses={400: {"model": Error}},
     tags=["Iesniegumi"],
 )
 def list_submissions(
-    status: str | None = None, topic: str | None = None
+    status: SubmissionStatus | None = None, topic: Topic | None = None
 ) -> list[SubmissionListItem]:
-    records = storage.list_submissions(status=status, topic=topic)
+    # Atļautās vērtības pārbauda FastAPI pēc līguma enum: citādi 400 VALIDATION_ERROR.
+    records = storage.list_submissions(
+        status=status.value if status else None,
+        topic=topic.value if topic else None,
+    )
     return [SubmissionListItem(**record) for record in records]
 
 
