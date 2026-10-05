@@ -204,7 +204,19 @@ components:
       properties:
         personalCode:
           type: string
-          description: Iesniedzēja personas kods. Formāta noteikumi pieteikumā CR-1.
+          description: |
+            Iesniedzēja personas kods (CR-1). Tieši 11 cipari, bez defises
+            un atstarpēm. Derīgi divi formāti:
+
+            - vecais `DDMMGGCNNNK`: dzimšanas datums, gadsimta cipars `C`
+              (`0` = 1800., `1` = 1900., `2` = 2000.), `NNN` un kontrolcipars `K`.
+              Datumam jāeksistē un jābūt ne vēlākam par šodienu.
+            - jaunais `32NNNNNNNNN`: sākas ar `32`, datuma un kontrolcipara nav.
+
+            Kļūdas laukam `personalCode`: tukšs teksts vai lauka nav —
+            `REQUIRED`; jebkas cits nederīgs (arī par īsu vai par garu) —
+            `INVALID_FORMAT`. `TOO_LONG` šim laukam netiek izmantots.
+          pattern: '^[0-9]{11}$'
           example: '32000000001'
         fullName:
           type: string
